@@ -6,7 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.rateLimiter = void 0;
 const express_1 = __importDefault(require("express"));
 const redis_1 = require("redis");
-const pg_1 = require("pg");
+const sequelize_1 = require("sequelize");
 const body_parser_1 = __importDefault(require("body-parser"));
 const app = (0, express_1.default)();
 app.use(body_parser_1.default.json());
@@ -29,16 +29,62 @@ redisClient.on("error", (err) => {
     console.error("Redis connection error:", err);
 });
 // Initialize PostgreSQL pool
-const pgPool = new pg_1.Pool({
-    user: process.env.POSTGRES_USER,
+// const pgPool = new Pool({
+//   user: process.env.POSTGRES_USER,
+//   host: process.env.POSTGRES_HOST,
+//   database: process.env.POSTGRES_DB,
+//   password: process.env.POSTGRES_PASSWORD,
+//   port: 5432,
+// });
+// pgPool.on("error", (err) => {
+//   console.error("PostgreSQL connection error:", err);
+// });
+const sequelize = new sequelize_1.Sequelize(process.env.POSTGRES_DB, process.env.POSTGRES_USER, process.env.POSTGRES_PASSWORD, {
     host: process.env.POSTGRES_HOST,
-    database: process.env.POSTGRES_DB,
-    password: process.env.POSTGRES_PASSWORD,
-    port: 5432,
+    dialect: "postgres",
 });
-pgPool.on("error", (err) => {
-    console.error("PostgreSQL connection error:", err);
+const SmsLog = sequelize.define("SmsLog", {
+    ip_address: {
+        type: sequelize_1.DataTypes.STRING,
+        allowNull: true, // Set to false if this field is required
+    },
+    phone_number: {
+        type: sequelize_1.DataTypes.STRING,
+        allowNull: false, // Phone number is required
+    },
+    timestamp: {
+        type: sequelize_1.DataTypes.DATE,
+        allowNull: true,
+    },
+    status: {
+        type: sequelize_1.DataTypes.STRING,
+        allowNull: true, // Set to false if this field is required
+    },
+    message: {
+        type: sequelize_1.DataTypes.TEXT,
+        allowNull: true, // Set to false if this field is required
+    },
 });
+const createTables = async () => {
+    try {
+        await sequelize.authenticate(); // Check connection
+        console.log("Connection has been established successfully.");
+        await sequelize.sync(); // Create tables if they don't exist
+        console.log('Tables "SmsLog" are ready');
+    }
+    catch (err) {
+        console.error("Unable to connect to the database:", err);
+    }
+};
+createTables();
+const logSmsRequest = async (ip, phoneNumber, status, message) => {
+    await SmsLog.create({
+        ip_address: ip,
+        phone_number: phoneNumber,
+        status,
+        message,
+    });
+};
 const rateLimiter = async (req, res, next) => {
     const ip = req.ip;
     const { phoneNumber } = req.body;
@@ -62,7 +108,8 @@ const rateLimiter = async (req, res, next) => {
             res.setHeader("Retry-After", "60"); // Retry after 1 minute
             return res.status(429).json({
                 message: "Too many requests: Limit of 3 requests per minute exceeded",
-                retryAfter: 60,
+                retryAfter: "1 min",
+                stamp: 60,
             });
         }
         // @ts-ignore
@@ -70,7 +117,8 @@ const rateLimiter = async (req, res, next) => {
             res.setHeader("Retry-After", "86400"); // Retry after 24 hours
             return res.status(429).json({
                 message: "Too many requests: Limit of 10 requests per day exceeded",
-                retryAfter: 86400,
+                retryAfter: "24 hr",
+                stamp: 86400,
             });
         }
         // Proceed to the next middleware if limits are not exceeded
@@ -89,15 +137,15 @@ const rateLimiter = async (req, res, next) => {
 exports.rateLimiter = rateLimiter;
 const sendSms = async (req, res) => {
     const { phoneNumber, message } = req.body;
-    const ip = req.ip;
+    const ip = req.ip ?? "NOT_FOUND";
     console.log("Send SMS API CALLED");
     try {
         // Simulate SMS sending logic here
-        // await logSmsRequest(ip, phoneNumber, 'Success', message);
+        await logSmsRequest(ip, phoneNumber, "Success", message);
         res.send(`SMS sent to ${phoneNumber}`);
     }
     catch (error) {
-        // await logSmsRequest(ip, phoneNumber, 'Error', error.message);
+        await logSmsRequest(ip, phoneNumber, "Error", error.message);
         res.status(500).send("Failed to send SMS");
     }
 };
@@ -119,13 +167,37 @@ app.get("/redisn", async (req, res) => {
     }
 });
 // PostgreSQL test route
-app.get("/postgres", async (req, res) => {
-    try {
-        const result = await pgPool.query("SELECT NOW()");
-        res.send(`PostgreSQL Time: ${result.rows[0].now}`);
+// app.get("/postgres", async (req: Request, res: Response) => {
+//   try {
+//     const result = await pgPool.query("SELECT NOW()");
+//     res.send(`PostgreSQL Time: ${result.rows[0].now}`);
+//   } catch (err) {
+//     res.status(500).send(`PostgreSQL error: ${err}`);
+//   }
+// });
+// @ts-ignore
+app.get("/stats", async (req, res) => {
+    const { phoneNumber } = req.query;
+    if (!phoneNumber) {
+        return res
+            .status(400)
+            .json({ message: "Phone number and IP address are required" });
     }
-    catch (err) {
-        res.status(500).send(`PostgreSQL error: ${err}`);
+    const ipAddress = req.ip;
+    try {
+        const logs = await SmsLog.findAll({
+            where: {
+                phone_number: phoneNumber,
+                ip_address: ipAddress,
+            },
+            order: [["timestamp", "DESC"]], // Order by timestamp in descending order
+        });
+        // Send response with the logs
+        res.json(logs);
+    }
+    catch (error) {
+        console.error("Error fetching logs:", error);
+        res.status(500).send("Internal Server Error");
     }
 });
 app.listen(3000, () => {
