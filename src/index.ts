@@ -7,8 +7,11 @@ import { redisClient } from "./redisSetup";
 import { SmsLog, createTables } from "./db";
 import { rateRouter } from "./rate-limit/route";
 import { statsRouter } from "./stats/route";
+import cors from "cors"
 
 const app = express();
+app.use(cors());
+
 app.use(bodyParser.json());
 
 const server = app.listen(3000, () => {

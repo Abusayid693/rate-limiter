@@ -10,28 +10,17 @@ export const rateLimit = async (
   const ip = req.ip as string;
   const { phoneNumber } = req.body;
 
-  // Keys for tracking the requests per minute and per day
   const minuteKey = `sms:${ip}:${phoneNumber}:minute`;
   const dayKey = `sms:${ip}:${phoneNumber}:day`;
 
   try {
-    // Start a Redis transaction to ensure atomic operations
     await redisClient.connect();
-    const transaction = redisClient.multi();
 
-    // Increment the counters and set expiration times
-    transaction.incr(minuteKey);
-    transaction.incr(dayKey);
-    transaction.expire(minuteKey, 60); // Expire after 60 seconds
-    transaction.expire(dayKey, 86400); // Expire after 24 hours (86400 seconds)
-
-    // Execute the transaction
-    const [minuteCount, dayCount] = await transaction.exec();
-
-    // Check rate limits
+    const minuteCount = (await redisClient.get(minuteKey)) ?? 0;
+    const dayCount = (await redisClient.get(dayKey)) ?? 0;
 
     // @ts-ignore
-    if (dayCount > 10) {
+    if (dayCount >= 10) {
       await logSmsRequest(
         ip,
         phoneNumber,
@@ -47,7 +36,7 @@ export const rateLimit = async (
     }
 
     // @ts-ignore
-    if (minuteCount > 3) {
+    if (minuteCount >= 3) {
       await logSmsRequest(
         ip,
         phoneNumber,
@@ -62,6 +51,16 @@ export const rateLimit = async (
       });
     }
 
+    const transaction = redisClient.multi();
+
+    transaction.incr(minuteKey);
+    transaction.incr(dayKey);
+    transaction.expire(minuteKey, 60); // Expire after 60 seconds
+    transaction.expire(dayKey, 86400); // Expire after 24 hours (86400 seconds)
+
+    // Execute the transaction
+    await transaction.exec();
+
     next();
   } catch (error) {
     console.error("Redis error:", error);
@@ -73,21 +72,16 @@ export const rateLimit = async (
   }
 };
 
-export const sendSms = async (
-  req: Request,
-  res: Response,
-) => {
+export const sendSms = async (req: Request, res: Response) => {
   const { phoneNumber, message } = req.body;
   const ip = req.ip ?? "NOT_FOUND";
 
   if (!phoneNumber || !message) {
-    res
-      .status(400)
-      .json({ message: "Please provide phoneNumber and message" });
+    res.status(400).json({ message: "Please provide phoneNumber and message" });
     return;
   }
 
-  if(!ip){
+  if (!ip) {
     res.status(500).send("Failed to send SMS");
   }
 

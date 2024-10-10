@@ -9,7 +9,9 @@ const redisSetup_1 = require("./redisSetup");
 const db_1 = require("./db");
 const route_1 = require("./rate-limit/route");
 const route_2 = require("./stats/route");
+const cors_1 = __importDefault(require("cors"));
 const app = (0, express_1.default)();
+app.use((0, cors_1.default)());
 app.use(body_parser_1.default.json());
 const server = app.listen(3000, () => {
     console.log("Server is running on port 3000");

@@ -20,6 +20,18 @@ services:
     networks:
       - app-network
 
+  dashboard:
+    container_name: dashboard
+    build:
+      context: ./dashboard  # Specify the path to the Dockerfile for the dashboard
+      dockerfile: Dockerfile
+    ports:
+      - '3001:80'  # Expose port 80 from the Nginx container to port 3001 on the host
+    volumes:
+      - .:/usr/src/app
+    networks:
+      - app-network
+
   redis:
     image: 'redis:alpine'
     container_name: redis
