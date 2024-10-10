@@ -14,31 +14,9 @@ app.use(body_parser_1.default.json());
 const redisClient = (0, redis_1.createClient)({
     url: `redis://${process.env.REDIS_HOST}:6379`,
 });
-// const sequelize = new Sequelize('sms_api', 'user', 'password', {
-//     host: 'localhost',
-//     dialect: 'postgres'
-// });
-// const SmsLog = sequelize.define('SmsLog', {
-//     ip_address: { type: DataTypes.STRING },
-//     phone_number: { type: DataTypes.STRING },
-//     timestamp: { type: DataTypes.DATE },
-//     status: { type: DataTypes.STRING },
-//     message: { type: DataTypes.TEXT }
-// });
 redisClient.on("error", (err) => {
     console.error("Redis connection error:", err);
 });
-// Initialize PostgreSQL pool
-// const pgPool = new Pool({
-//   user: process.env.POSTGRES_USER,
-//   host: process.env.POSTGRES_HOST,
-//   database: process.env.POSTGRES_DB,
-//   password: process.env.POSTGRES_PASSWORD,
-//   port: 5432,
-// });
-// pgPool.on("error", (err) => {
-//   console.error("PostgreSQL connection error:", err);
-// });
 const sequelize = new sequelize_1.Sequelize(process.env.POSTGRES_DB, process.env.POSTGRES_USER, process.env.POSTGRES_PASSWORD, {
     host: process.env.POSTGRES_HOST,
     dialect: "postgres",
@@ -105,6 +83,7 @@ const rateLimiter = async (req, res, next) => {
         // Check rate limits
         // @ts-ignore
         if (minuteCount > 3) {
+            await logSmsRequest(ip, phoneNumber, "Error", "Too many requests: Limit of 3 requests per minute exceeded");
             res.setHeader("Retry-After", "60"); // Retry after 1 minute
             return res.status(429).json({
                 message: "Too many requests: Limit of 3 requests per minute exceeded",
@@ -114,6 +93,7 @@ const rateLimiter = async (req, res, next) => {
         }
         // @ts-ignore
         if (dayCount > 10) {
+            await logSmsRequest(ip, phoneNumber, "Error", "Too many requests: Limit of 3 requests per minute exceeded");
             res.setHeader("Retry-After", "86400"); // Retry after 24 hours
             return res.status(429).json({
                 message: "Too many requests: Limit of 10 requests per day exceeded",
@@ -145,7 +125,6 @@ const sendSms = async (req, res) => {
         res.send(`SMS sent to ${phoneNumber}`);
     }
     catch (error) {
-        await logSmsRequest(ip, phoneNumber, "Error", error.message);
         res.status(500).send("Failed to send SMS");
     }
 };
@@ -166,15 +145,6 @@ app.get("/redisn", async (req, res) => {
         await redisClient.disconnect();
     }
 });
-// PostgreSQL test route
-// app.get("/postgres", async (req: Request, res: Response) => {
-//   try {
-//     const result = await pgPool.query("SELECT NOW()");
-//     res.send(`PostgreSQL Time: ${result.rows[0].now}`);
-//   } catch (err) {
-//     res.status(500).send(`PostgreSQL error: ${err}`);
-//   }
-// });
 // @ts-ignore
 app.get("/stats", async (req, res) => {
     const { phoneNumber } = req.query;

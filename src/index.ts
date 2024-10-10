@@ -82,7 +82,7 @@ export const rateLimiter = async (
   res: Response,
   next: NextFunction
 ) => {
-  const ip = req.ip;
+  const ip = req.ip as string;
   const { phoneNumber } = req.body;
 
   // Keys for tracking the requests per minute and per day
@@ -106,6 +106,7 @@ export const rateLimiter = async (
     // Check rate limits
     // @ts-ignore
     if (minuteCount > 3) {
+      await logSmsRequest(ip, phoneNumber, "Error", "Too many requests: Limit of 3 requests per minute exceeded");
       res.setHeader("Retry-After", "60"); // Retry after 1 minute
       return res.status(429).json({
         message: "Too many requests: Limit of 3 requests per minute exceeded",
@@ -116,6 +117,7 @@ export const rateLimiter = async (
 
     // @ts-ignore
     if (dayCount > 10) {
+      await logSmsRequest(ip, phoneNumber, "Error", "Too many requests: Limit of 3 requests per minute exceeded");
       res.setHeader("Retry-After", "86400"); // Retry after 24 hours
       return res.status(429).json({
         message: "Too many requests: Limit of 10 requests per day exceeded",
@@ -147,7 +149,7 @@ const sendSms = async (req: Request, res: Response) => {
     await logSmsRequest(ip, phoneNumber, "Success", message);
     res.send(`SMS sent to ${phoneNumber}`);
   } catch (error: any) {
-    await logSmsRequest(ip, phoneNumber, "Error", error.message);
+  
     res.status(500).send("Failed to send SMS");
   }
 };
