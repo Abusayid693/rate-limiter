@@ -4,7 +4,6 @@ import { SmsLog } from "../db";
 export const getStats = async (
   req: Request,
   res: Response,
-  next: NextFunction
 ) => {
   const { phoneNumber } = req.query;
 
@@ -12,10 +11,13 @@ export const getStats = async (
     res
       .status(400)
       .json({ message: "Phone number and IP address are required" });
-    return;
   }
 
   const ipAddress = req.ip;
+
+  if(!ipAddress){
+    res.status(500).send("Failed to send SMS");
+  }
 
   try {
     const logs = await SmsLog.findAll({
@@ -33,18 +35,3 @@ export const getStats = async (
     res.status(500).send("Internal Server Error");
   }
 };
-
-// export const getStats = async (req: Request, res: Response,   next: NextFunction) => {
-//     const { phoneNumber } = req.query;
-//     const ip = req.ip ?? "NOT_FOUND";
-
-//     console.log("Send SMS API CALLED");
-
-//     try {
-//       // Simulate SMS sending logic here
-
-//       res.send(`SMS sent to ${phoneNumber}`);
-//     } catch (error: any) {
-//       res.status(500).send("Failed to send SMS");
-//     }
-//   };

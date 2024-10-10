@@ -29,21 +29,6 @@ export const rateLimit = async (
     const [minuteCount, dayCount] = await transaction.exec();
 
     // Check rate limits
-    // @ts-ignore
-    if (minuteCount > 3) {
-      await logSmsRequest(
-        ip,
-        phoneNumber,
-        "Error",
-        "Too many requests: Limit of 3 requests per minute exceeded"
-      );
-      res.setHeader("Retry-After", "60"); // Retry after 1 minute
-      return res.status(429).json({
-        message: "Too many requests: Limit of 3 requests per minute exceeded",
-        retryAfter: "1 min",
-        stamp: 60,
-      });
-    }
 
     // @ts-ignore
     if (dayCount > 10) {
@@ -61,21 +46,50 @@ export const rateLimit = async (
       });
     }
 
+    // @ts-ignore
+    if (minuteCount > 3) {
+      await logSmsRequest(
+        ip,
+        phoneNumber,
+        "Error",
+        "Too many requests: Limit of 3 requests per minute exceeded"
+      );
+      res.setHeader("Retry-After", "60"); // Retry after 1 minute
+      return res.status(429).json({
+        message: "Too many requests: Limit of 3 requests per minute exceeded",
+        retryAfter: "1 min",
+        stamp: 60,
+      });
+    }
+
     next();
   } catch (error) {
     console.error("Redis error:", error);
     return res
       .status(500)
       .send("Internal Server Error: Unable to connect to Redis");
-
   } finally {
     await redisClient.disconnect();
   }
 };
 
-export const sendSms = async (req: Request, res: Response,   next: NextFunction) => {
+export const sendSms = async (
+  req: Request,
+  res: Response,
+) => {
   const { phoneNumber, message } = req.body;
   const ip = req.ip ?? "NOT_FOUND";
+
+  if (!phoneNumber || !message) {
+    res
+      .status(400)
+      .json({ message: "Please provide phoneNumber and message" });
+    return;
+  }
+
+  if(!ip){
+    res.status(500).send("Failed to send SMS");
+  }
 
   console.log("Send SMS API CALLED");
 

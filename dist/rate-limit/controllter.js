@@ -22,16 +22,6 @@ const rateLimit = async (req, res, next) => {
         const [minuteCount, dayCount] = await transaction.exec();
         // Check rate limits
         // @ts-ignore
-        if (minuteCount > 3) {
-            await (0, db_1.logSmsRequest)(ip, phoneNumber, "Error", "Too many requests: Limit of 3 requests per minute exceeded");
-            res.setHeader("Retry-After", "60"); // Retry after 1 minute
-            return res.status(429).json({
-                message: "Too many requests: Limit of 3 requests per minute exceeded",
-                retryAfter: "1 min",
-                stamp: 60,
-            });
-        }
-        // @ts-ignore
         if (dayCount > 10) {
             await (0, db_1.logSmsRequest)(ip, phoneNumber, "Error", "Too many requests: Limit of 3 requests per minute exceeded");
             res.setHeader("Retry-After", "86400"); // Retry after 24 hours
@@ -39,6 +29,16 @@ const rateLimit = async (req, res, next) => {
                 message: "Too many requests: Limit of 10 requests per day exceeded",
                 retryAfter: "24 hr",
                 stamp: 86400,
+            });
+        }
+        // @ts-ignore
+        if (minuteCount > 3) {
+            await (0, db_1.logSmsRequest)(ip, phoneNumber, "Error", "Too many requests: Limit of 3 requests per minute exceeded");
+            res.setHeader("Retry-After", "60"); // Retry after 1 minute
+            return res.status(429).json({
+                message: "Too many requests: Limit of 3 requests per minute exceeded",
+                retryAfter: "1 min",
+                stamp: 60,
             });
         }
         next();
@@ -54,9 +54,18 @@ const rateLimit = async (req, res, next) => {
     }
 };
 exports.rateLimit = rateLimit;
-const sendSms = async (req, res, next) => {
+const sendSms = async (req, res) => {
     const { phoneNumber, message } = req.body;
     const ip = req.ip ?? "NOT_FOUND";
+    if (!phoneNumber || !message) {
+        res
+            .status(400)
+            .json({ message: "Please provide phoneNumber and message" });
+        return;
+    }
+    if (!ip) {
+        res.status(500).send("Failed to send SMS");
+    }
     console.log("Send SMS API CALLED");
     try {
         // Simulate SMS sending logic here
