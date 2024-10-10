@@ -12,9 +12,12 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@types/sequelize": "^4.28.20",
+    "body-parser": "^1.20.3",
     "express": "^4.21.1",
     "pg": "^8.13.0",
-    "redis": "^4.7.0"
+    "redis": "^4.7.0",
+    "sequelize": "^6.37.4"
   },
   "devDependencies": {
     "@types/express": "^5.0.0",
